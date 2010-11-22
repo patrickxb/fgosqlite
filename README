@@ -1,0 +1,8 @@
+This is based on Russ Cox's original gosqlite package:
+
+    http://code.google.com/p/gosqlite/
+
+I added Scan2 and Exec2 which use sqlite api calls to get/bind values instead of the 
+original which basically converted everything to strings.
+
+Scan2 and Exec2 are significantly faster.  See the benchmarks in fgosqlite_test.go.
