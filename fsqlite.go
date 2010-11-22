@@ -234,6 +234,68 @@ func (s *Stmt) Exec(args ...interface{}) os.Error {
 	return nil
 }
 
+func (s *Stmt) Exec2(args ...interface{}) os.Error {
+	s.args = fmt.Sprintf(" %v", []interface{}(args))
+	rv := C.sqlite3_reset(s.stmt)
+	if rv != 0 {
+		return s.c.error(rv)
+	}
+
+	n := int(C.sqlite3_bind_parameter_count(s.stmt))
+	if n != len(args) {
+		return os.NewError(fmt.Sprintf("incorrect argument count for Stmt.Exec: have %d want %d", len(args), n))
+	}
+
+	for i, v := range args {
+		var str string
+		switch v := v.(type) {
+		case int:
+			if rv := C.sqlite3_bind_int(s.stmt, C.int(i+1), C.int(v)); rv != 0 {
+				return s.c.error(rv)
+			}
+			continue
+		case int64:
+			if rv := C.sqlite3_bind_int64(s.stmt, C.int(i+1), C.sqlite3_int64(v)); rv != 0 {
+				return s.c.error(rv)
+			}
+			continue
+		case float64:
+			if rv := C.sqlite3_bind_double(s.stmt, C.int(i+1), C.double(v)); rv != 0 {
+				return s.c.error(rv)
+			}
+			continue
+
+		case []byte:
+			var p *byte
+			if len(v) > 0 {
+				p = &v[0]
+			}
+			if rv := C.my_bind_blob(s.stmt, C.int(i+1), unsafe.Pointer(p), C.int(len(v))); rv != 0 {
+				return s.c.error(rv)
+			}
+			continue
+
+		case bool:
+			if v {
+				str = "1"
+			} else {
+				str = "0"
+			}
+
+		default:
+			str = fmt.Sprint(v)
+		}
+
+		cstr := C.CString(str)
+		rv := C.my_bind_text(s.stmt, C.int(i+1), cstr, C.int(len(str)))
+		C.free(unsafe.Pointer(cstr))
+		if rv != 0 {
+			return s.c.error(rv)
+		}
+	}
+	return nil
+}
+
 func (s *Stmt) Error() os.Error {
 	return s.err
 }
@@ -305,32 +367,32 @@ func (s *Stmt) Scan2(args ...interface{}) os.Error {
 	}
 
 	for i, v := range args {
-                /*
-		n := C.sqlite3_column_bytes(s.stmt, C.int(i))
-		p := C.sqlite3_column_blob(s.stmt, C.int(i))
-		if p == nil && n > 0 {
-			return os.NewError("got nil blob")
-		}
-		var data []byte
-		if n > 0 {
-			data = (*[1 << 30]byte)(unsafe.Pointer(p))[0:n]
-		}
-                */
-		switch v := v.(type) {
-                        /*
-		case *[]byte:
-			*v = data
-		case *string:
-			*v = string(data)
-		case *bool:
-			*v = string(data) == "1"
-		case *int:
-			x, err := strconv.Atoi(string(data))
-			if err != nil {
-				return os.NewError("arg " + strconv.Itoa(i) + " as int: " + err.String())
+		/*
+			n := C.sqlite3_column_bytes(s.stmt, C.int(i))
+			p := C.sqlite3_column_blob(s.stmt, C.int(i))
+			if p == nil && n > 0 {
+				return os.NewError("got nil blob")
 			}
-			*v = x
-                        */
+			var data []byte
+			if n > 0 {
+				data = (*[1 << 30]byte)(unsafe.Pointer(p))[0:n]
+			}
+		*/
+		switch v := v.(type) {
+		/*
+			case *[]byte:
+				*v = data
+			case *string:
+				*v = string(data)
+			case *bool:
+				*v = string(data) == "1"
+			case *int:
+				x, err := strconv.Atoi(string(data))
+				if err != nil {
+					return os.NewError("arg " + strconv.Itoa(i) + " as int: " + err.String())
+				}
+				*v = x
+		*/
 		case *int64:
 			x := C.sqlite3_column_int64(s.stmt, C.int(i))
 			*v = int64(x)
